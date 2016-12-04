@@ -2,20 +2,16 @@ import xlsxwriter
 import random
 import sys
 import math
+from time import time
 from enum import Enum
 WIFI_STRENGTH = 6 #each position == 5 ft, each WIFI_STRENGTH == 5ft
-'''
-workbook = xlsxwriter.Workbook('Expenses01.xlsx')
-worksheet = workbook.add_worksheet()
 
-worksheet.write(0,0,0)
-workbook.close()
-'''
 def main():
     _workbook = xlsxwriter.Workbook('xlsx_SSC_Simulation.xlsx') #instantiate xlsx workbook
-    _worksheet = _workbook.add_worksheet() #setup a worksheet to display on
-    _map = Map(_worksheet) #instantiate a map to simulate xlsx
+    #Size, CharacterCount
+    _map = Map(_workbook,int(sys.argv[1]),int(sys.argv[2])) #instantiate a map to simulate xlsx
     _map.step(); #step through the simulation
+    _workbook.close();
 
 class Map:
     '''
@@ -98,14 +94,13 @@ class Map:
         #A State Enum for each character state
         class State(Enum):
             resting = 0
-            potential_client = 1
+            p_client = 1
             client = 2
-            potential_host = 3
+            p_host = 3
             host = 4
 
-        name_pool = ["Joe","Jim","Tomas","Sally","Diane","Sally","Scott","Lillian","Scott","Lynn","Bernice","Donnie"]
+        name_pool = ["Joe","Jim","Tomas","Sally","Diane","Ian","Will","Lillian","Scott","Lynn","Bernice","Donnie"]
         name_index = 0
-        state_pool = ["non state", "p client", "client", "p host", "host", "offline"]
 
         @staticmethod
         def new_name():
@@ -183,13 +178,23 @@ class Map:
           new_map.append(row)
         return new_map
 
-    def __init__(self,worksheet):
+    def __init__(self,workbook,size,character_count):
         #instantiate properties; worksheet : xlsxwriter.Worksheet, size : int, map : [char][char], character_count : int, characters : [Characters]
-        self.worksheet = worksheet #The data will be displayed through xlsx
-        self.size = 16 #The size determines the matrix length
-        self.map = Map.build_map(self.size) #Build the map
-        self.character_count = random.randrange(2,13) # 2 to 12 inclusive
-        self.characters = self.build_character_list(self.character_count,self.size) #maintain a list of characters of count 2 to 12
+        self.workbook = workbook;
+        if (not (size is None)):
+            self.size = size;
+        else:
+            self.size = random.randrange(1,4)*4 #The size determines the matrix length
+        self.map = Map.build_map(self.size); #Build the map
+        if (not (character_count is None)):
+            self.character_count = character_count;
+        else:
+            self.character_count = random.randrange(2,13); # 2 to 12 inclusive
+        self.characters = self.build_character_list(self.character_count,self.size); #maintain a list of characters of count 2 to 12
+        self.time_total = 0;
+        self.time_diff = 0;
+        self.step_count = 0;
+
 
     def clear_map(self):
         for row in self.map:
@@ -197,37 +202,60 @@ class Map:
                 pos.clear()
 
     def write_map(self):
+        form = self.workbook.add_format();
+        form.set_align("center");
+        form.set_align("vcenter");
+        form.set_font_size(16);
+        form.set_shrink();
         for i in range(self.size):
             for j in range(self.size):
                 sys.stdout.write(self.map[j][i].write_characters())
-                self.worksheet.write(i,j,self.map[j][i].write_characters())
+                self.worksheet.write(i,j,self.map[j][i].write_characters(),form)
             sys.stdout.write('\n')
 
     def write_character_list(self):
-        self.worksheet.write(self.size,0,"Name: ")
-        self.worksheet.write(self.size+1,0,"Connect: ")
-        self.worksheet.write(self.size+2,0,"Position: ")
-        self.worksheet.write(self.size+3,0,"State: ")
-        self.worksheet.write(self.size+4,0,"Carrier: ")
-        self.worksheet.write(self.size+5,0,"Signal Str: ")
-        self.worksheet.write(self.size+6,0,"Bandwidth: ")
-        self.worksheet.write(self.size+7,0,"Potential Con: ")
+        form = self.workbook.add_format();
+        form.set_shrink()
+        self.worksheet.write(self.size,0,"Name: ",form)
+        self.worksheet.write(self.size+1,0,"Connect: ",form)
+        self.worksheet.write(self.size+2,0,"Position: ",form)
+        self.worksheet.write(self.size+3,0,"State: ",form)
+        self.worksheet.write(self.size+4,0,"Carrier: ",form)
+        self.worksheet.write(self.size+5,0,"Signal Str: ",form)
+        self.worksheet.write(self.size+6,0,"Bandwidth: ",form)
+        self.worksheet.write(self.size+7,0,"Potential Con: ",form)
         for i in range(len(self.characters)):
+            form.set_align("center");
             print self.characters[i].get_name()
-            self.worksheet.write(self.size,i+1,self.characters[i].get_name())
-            if (self.characters[i].get_connection() != None): self.worksheet.write(self.size+1,i+1,self.characters[i].get_connection().get_name())
-            self.worksheet.write(self.size+2,i+1,str(self.characters[i].get_x()) + "," + str(self.characters[i].get_y()))
-            self.worksheet.write(self.size+3,i+1,self.characters[i].get_state().name)
-            self.worksheet.write(self.size+4,i+1,self.characters[i].get_carrier())
-            self.worksheet.write(self.size+5,i+1,self.characters[i].get_signal_strength())
-            self.worksheet.write(self.size+6,i+1,self.characters[i].get_bandwidth_limit())
+            self.worksheet.write(self.size,i+1,self.characters[i].get_name(),form)
+            if (self.characters[i].get_connection() != None): self.worksheet.write(self.size+1,i+1,self.characters[i].get_connection().get_name(),form)
+            self.worksheet.write(self.size+2,i+1,str(self.characters[i].get_x()) + "," + str(self.characters[i].get_y()),form)
+            self.worksheet.write(self.size+3,i+1,self.characters[i].get_state().name,form)
+            self.worksheet.write(self.size+4,i+1,self.characters[i].get_carrier(),form)
+            self.worksheet.write(self.size+5,i+1,self.characters[i].get_signal_strength(),form)
+            self.worksheet.write(self.size+6,i+1,self.characters[i].get_bandwidth_limit(),form)
             conn = self.characters[i].get_potential_connections()
             for j in range(len(conn)):
-                self.worksheet.write(self.size+7+j,i+1,conn[j].get_name())
+                self.worksheet.write(self.size+7+j,i+1,conn[j].get_name(),form)
+
+    def write_meta_data(self):
+        form = self.workbook.add_format();
+        form.set_shrink();
+        form.set_align("center");
+        #write current step
+        self.worksheet.write(0,self.size,"Step:",form)
+        self.worksheet.write(0,self.size+1,self.step_count,form)
+        #write total time
+        self.worksheet.write(1,self.size,"Total Time:",form)
+        self.worksheet.write(1,self.size+1,str(round(self.time_total*1000000)) + "ms",form)
+        #write time difference between steps
+        self.worksheet.write(2,self.size,"Diff Time:",form)
+        self.worksheet.write(2,self.size+1,str(round(self.time_diff*1000000)) + "ms",form)
 
     def write(self):
         self.write_map()
         self.write_character_list()
+        self.write_meta_data()
 
     def step_characters(self):
         for character in self.characters:
@@ -279,14 +307,14 @@ class Map:
                 connections = character.get_potential_connections()
                 if (state == Map.Character.State.resting):
                     if (character.get_signal_strength() > 0 and character.get_bandwidth_limit() > 0):
-                        character.set_state(Map.Character.State.potential_host)
+                        character.set_state(Map.Character.State.p_host)
                         dirty_flag = True
                     elif (random.randrange(3) == 2 and character.get_bandwidth_limit() > 0):
-                        character.set_state(Map.Character.State.potential_client)
+                        character.set_state(Map.Character.State.p_client)
                         dirty_flag = True
-                elif (state == Map.Character.State.potential_client):
+                elif (state == Map.Character.State.p_client):
                     for connection in connections:
-                        if (connection.get_state() == Map.Character.State.potential_host):
+                        if (connection.get_state() == Map.Character.State.p_host):
                             character.set_connection(connection)
                             connection.set_connection(character)
                             character.set_state(Map.Character.State.client)
@@ -294,7 +322,7 @@ class Map:
                             break
                 elif (state == Map.Character.State.client):
                     pass
-                elif (state == Map.Character.State.potential_host):
+                elif (state == Map.Character.State.p_host):
                     if (character.get_connection() != None):
                         character.set_state(Map.Character.State.host)
                         dirty_flag = True
@@ -312,14 +340,23 @@ class Map:
     def step(self):
         #Each step() is a call to move the dynamics of the simulation once, this includes characters walking,
         #gaining and losing signal strength, characters changing their states, new connections being formed
-
+        self.worksheet = self.workbook.add_worksheet(); #The data will be displayed through xlsx
+        for i in range(0,self.size):
+            self.worksheet.set_row(i,18)
+        self.step_count += 1;
+        self.time_diff = 0;
+        time_init = time();
         #Move and place characters
-        self.step_characters()
-        #Populate Map With New Positions
-        self.populate_map()
+        self.step_characters();
         #Figure character potential connections
-        self.step_network()
+        self.step_network();
+        #Figure time between algorithms
+        self.time_diff = time() - time_init;
+        self.time_total += self.time_diff;
+        #Populate Map With New Positions
+        self.populate_map();
         #write map and character information
-        self.write()
+        self.write();
+
 
 main()
